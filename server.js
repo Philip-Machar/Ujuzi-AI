@@ -8,6 +8,7 @@ app.use(express.urlencoded({ extended: true}));
 app.use(express.json());
 
 app.post("/sms", (req, res) => {
+    console.log("Working...")
     const {text, from, to} = req.body;
 
     const response = `Thanks for this message : ${text}`;
