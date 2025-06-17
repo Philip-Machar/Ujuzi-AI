@@ -1,49 +1,43 @@
+const africastalking = require("africastalking");
 const express = require("express");
 require("dotenv").config();
-const africastalking = require("africastalking");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// Initialize Africa's Talking
+//initialize Africa's Talking
 const AT = africastalking({
     apiKey: process.env.AFRICASTALKING_API_KEY,
-    username: process.env.AFRICASTALKING_USERNAME,
+    username: process.env.AFRICASTALKING_USERNAME
 });
 
 // Middleware to parse incoming data
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Handle incoming SMS
 app.post("/sms", async (req, res) => {
-    const { text, from } = req.body;
+    const {to, from, text} = req.body;
 
-    console.log("Incoming message:", text, "from:", from);
+    console.log(`Incoming message from ${from}: ${text}`);
 
-    const reply = "Hey there, how can I help you?";
+    const reply = "Hi there 👋, How can I help you today 😁";
 
     try {
-        // Send SMS reply using Africa's Talking
+        //sending message back to the user
         const result = await AT.SMS.send({
             to: from,
             message: reply,
             from: process.env.SENDER_ID || "46399"
         });
 
-        console.log("Message sent:", JSON.stringify(result, null, 2));
-
-        // Respond to Africa’s Talking webhook
+        //respoding to AT webhook
         res.status(200).send("OK");
-    } catch (error) {
-        console.error("Error sending SMS:", error);
-        res.status(500).send("Failed to send reply");
-    }
-});
 
-// Basic test route
-app.get("/", (req, res) => {
-    res.send("UjuziAI is running...");
+        console.log(JSON.stringify(result, null, 2));
+    } catch (error) {
+        console.error("Error sending SMS: ", error);
+        res.status(500).send("Failed to send reply");
+    };
 });
 
 app.listen(PORT, () => {
