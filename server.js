@@ -1,5 +1,5 @@
-const express = require("express");
 const africastalking = require("africastalking");
+const express = require("express");
 require("dotenv").config();
 
 const ModelClient = require("@azure-rest/ai-inference").default;
@@ -9,72 +9,71 @@ const { isUnexpected } = require("@azure-rest/ai-inference");
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// Africa's Talking setup
+//initialize Africa's Talking
 const AT = africastalking({
-  apiKey: process.env.AFRICASTALKING_API_KEY,
-  username: process.env.AFRICASTALKING_USERNAME,
+    apiKey: process.env.AFRICASTALKING_API_KEY,
+    username: process.env.AFRICASTALKING_USERNAME
 });
 
-// AI client setup (GitHub Marketplace OpenAI)
+//AI Client setup(Github Marketplace Open AI)
 const endpoint = "https://models.github.ai/inference";
-const token = process.env.GITHUB_TOKEN;
 const model = "openai/gpt-4.1";
+const toeken = process.env.GITHUB_TOKEN;
 
-const client = ModelClient(endpoint, new AzureKeyCredential(token));
+//initialize model client(allows us to make request to open AI in hosted in azure accessed through github)
+const client = ModelClient(endpoint, new AzureKeyCredential(toeken));
 
+// Middleware to parse incoming data
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// AI function to get response from GitHub OpenAI model
+//A function to get respose from open ai model in azure through github
 async function getAIResponse(userMessage) {
-  const response = await client.path("/chat/completions").post({
-    body: {
-      messages: [
-        { role: "system", content: "You're a helpful SMS assistant. Keep responses short and friendly." },
-        { role: "user", content: userMessage },
-      ],
-      temperature: 0.7,
-      top_p: 1,
-      model: model,
-    },
-  });
+    const response = await client.path("/chat/completions").post({
+        body: {
+            messages: [{
+                role: "system", content: "You're a helpful SMS assistant. Keep responses short, 160 characters or less.",
+            }, {
+                role: "user", content: userMessage,
+            }],
+            temperature: 0.7,
+            top_p: 1,
+            model: model,
+        },
+    });
 
-  if (isUnexpected(response)) {
-    throw new Error("AI error: " + JSON.stringify(response.body.error));
-  }
+    if (isUnexpected(response)) {
+        throw new Error("AI error: " + JSON.stringify(response.body.error));
+    };
 
-  return response.body.choices[0].message.content.trim();
-}
+    return response.body.choices[0].message.content.trim();
+};
 
-// SMS webhook
 app.post("/sms", async (req, res) => {
-  const { from, text } = req.body;
+    const {to, from, text} = req.body;
 
-  console.log(`📩 Incoming SMS from ${from}: ${text}`);
+    console.log(`Incoming message from ${from}: ${text}`);
 
-  try {
-    const aiReply = await getAIResponse(text);
+    try {
+        const reply = await getAIResponse(text);
 
-    const sms = await AT.SMS.send({
-      to: from,
-      message: aiReply,
-      from: process.env.SENDER_ID || "46399",
-    });
+        //sending message back to the user
+        const result = await AT.SMS.send({
+            to: from,
+            message: reply,
+            from: process.env.SENDER_ID || "46399"
+        });
 
-    console.log("📤 Sent reply:", JSON.stringify(sms, null, 2));
+        //respoding to AT webhook
+        res.status(200).send("OK");
 
-    res.status(200).send("OK");
-  } catch (err) {
-    console.error("❌ Error:", err.message);
-    await AT.SMS.send({
-      to: from,
-      message: "Sorry, I had a problem replying. Please try again shortly.",
-      from: process.env.SENDER_ID || "46399",
-    });
-    res.status(500).send("Error");
-  }
+        console.log(JSON.stringify(result, null, 2));
+    } catch (error) {
+        console.error("Error sending SMS: ", error);
+        res.status(500).send("Failed to send reply");
+    };
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`Server running at port ${PORT}...`);
 });
