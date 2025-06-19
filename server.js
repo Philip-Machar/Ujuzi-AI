@@ -32,7 +32,7 @@ async function getAIResponse(userMessage) {
     const response = await client.path("/chat/completions").post({
         body: {
             messages: [{
-                role: "system", content: "You're a helpful SMS assistant. Keep responses short, 160 characters or less.",
+                role: "system", content: "You're a helpful Kenyan SMS assistant, who fully understands kenyan culture, and languages(English, Kiswahili, Sheng, Mixture of English and Kiswahili). Keep responses short, 160 characters or less.",
             }, {
                 role: "user", content: userMessage,
             }],
@@ -61,7 +61,7 @@ app.post("/sms", async (req, res) => {
         const result = await AT.SMS.send({
             to: from,
             message: reply,
-            from: process.env.SENDER_ID || "46399"
+            from: process.env.SENDER_ID || null,
         });
 
         //respoding to AT webhook
