@@ -18,24 +18,36 @@ const AT = africastalking({
 //AI Client setup(Github Marketplace Open AI)
 const endpoint = "https://models.github.ai/inference";
 const model = "openai/gpt-4.1";
-const toeken = process.env.GITHUB_TOKEN;
+const token = process.env.GITHUB_TOKEN;
 
 //initialize model client(allows us to make request to open AI in hosted in azure accessed through github)
-const client = ModelClient(endpoint, new AzureKeyCredential(toeken));
+const client = ModelClient(endpoint, new AzureKeyCredential(token));
 
 // Middleware to parse incoming data
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+//current conversation memory storage
+const conversationHistory = new Map();
+
 //A function to get respose from open ai model in azure through github
-async function getAIResponse(userMessage) {
+async function getAIResponse(userMessage, phone) {
+
+    const systemPrompt = "You're a helpful Kenyan SMS assistant, who fully understands kenyan culture, and languages(English, Kiswahili, Sheng, Mixture of English and Kiswahili). Keep responses short, 160 characters or less."
+    const history = conversationHistory.get(phone) || [];
+
+    const messages = [
+            {role: "system", content: systemPrompt},
+            ...history.slice(-3).flatMap((entry) => [
+                {role: "user", content: entry.user},
+                {role: "assistant", content: entry.bot}
+            ]),
+            {role: "user", content: userMessage}
+        ]
+    
     const response = await client.path("/chat/completions").post({
         body: {
-            messages: [{
-                role: "system", content: "You're a helpful Kenyan SMS assistant, who fully understands kenyan culture, and languages(English, Kiswahili, Sheng, Mixture of English and Kiswahili). Keep responses short, 160 characters or less.",
-            }, {
-                role: "user", content: userMessage,
-            }],
+            messages: messages,
             temperature: 0.7,
             top_p: 1,
             model: model,
@@ -46,7 +58,25 @@ async function getAIResponse(userMessage) {
         throw new Error("AI error: " + JSON.stringify(response.body.error));
     };
 
-    return response.body.choices[0].message.content.trim();
+    let aiReply = response.body.choices[0].message.content.trim();
+
+    //check if respose is more that 160 characters and trim it
+    if (aiReply.length > 160) {
+        aiReply = aiReply.slice(0, 157) + "...";
+    }
+
+    //update the conversation history(how put in data to map in the first place)
+    const newHistory = [...history, {
+        user: userMessage,
+        bot: aiReply,
+        time: new Date()
+    }];
+
+    if (newHistory.length > 5) newHistory.shift();
+    conversationHistory.set(phone, newHistory);
+
+
+    return aiReply;
 };
 
 app.post("/sms", async (req, res) => {
@@ -55,7 +85,7 @@ app.post("/sms", async (req, res) => {
     console.log(`Incoming message from ${from}: ${text}`);
 
     try {
-        const reply = await getAIResponse(text);
+        const reply = await getAIResponse(text, from);
 
         //sending message back to the user
         const result = await AT.SMS.send({
