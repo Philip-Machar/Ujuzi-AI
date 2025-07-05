@@ -14,4 +14,10 @@ async function testMistral() {
     console.log("Chat:", chatResponse.choices[0].message.content);
   }
 
-testMistral();
+// Only run the test function when this file is executed directly
+if (require.main === module) {
+  testMistral();
+}
+
+// Export the client for use in other files
+module.exports = { client };
